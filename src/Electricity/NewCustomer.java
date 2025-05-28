@@ -115,18 +115,45 @@ public class NewCustomer extends JFrame implements ActionListener{
             String email = t6.getText();
             String phone = t7.getText();
 
-            String q1 = "insert into customer values('"+name+"','"+meter+"','"+address+"','"+city+"','"+state+"','"+email+"','"+phone+"')";
-            String q2 = "insert into login values('"+meter+"', '', '', '', '')";
-            try{
-                Conn c1 = new Conn();
-                c1.s.executeUpdate(q1);
-                c1.s.executeUpdate(q2);
+            // Basic input validation
+            if (name.isEmpty() || meter.isEmpty() || address.isEmpty() || city.isEmpty() || state.isEmpty() || email.isEmpty() || phone.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "All fields are required.");
+                return;
+            }
+
+            String queryCustomer = "insert into customer (name, meter, address, city, state, email, phone) values(?, ?, ?, ?, ?, ?, ?)";
+            String queryLogin = "insert into login (meter_no, username, name, password, user) values(?, '', '', '', '')"; // Default empty values for login as per original
+
+            try (Conn con = new Conn()) {
+                // Insert into customer table
+                try (PreparedStatement psCustomer = con.c.prepareStatement(queryCustomer)) {
+                    psCustomer.setString(1, name);
+                    psCustomer.setString(2, meter);
+                    psCustomer.setString(3, address);
+                    psCustomer.setString(4, city);
+                    psCustomer.setString(5, state);
+                    psCustomer.setString(6, email);
+                    psCustomer.setString(7, phone);
+                    psCustomer.executeUpdate();
+                } // psCustomer is auto-closed here
+
+                // Insert into login table
+                try (PreparedStatement psLogin = con.c.prepareStatement(queryLogin)) {
+                    psLogin.setString(1, meter);
+                    // The other parameters for login are set to empty strings as per original logic
+                    psLogin.executeUpdate();
+                } // psLogin is auto-closed here
+                
                 JOptionPane.showMessageDialog(null,"Customer Details Added Successfully");
                 this.setVisible(false);
                 new MeterInfo(meter).setVisible(true);
 
-            }catch(Exception ex){
+            } catch(SQLException ex){
                  ex.printStackTrace();
+                 JOptionPane.showMessageDialog(null,"Database Error: " + ex.getMessage());
+            } catch (Exception ex) { // Catch any other unexpected errors
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(null, "An unexpected error occurred: " + ex.getMessage());
             }
         }else if(ae.getSource() ==b2){
                 this.setVisible(false);

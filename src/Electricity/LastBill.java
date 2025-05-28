@@ -38,38 +38,67 @@ public class LastBill extends JFrame implements ActionListener{
         setLocation(350,40);
     }
     public void actionPerformed(ActionEvent ae){
-        try{
-            Conn c = new Conn();
+        String meterNumber = t2.getText(); // Assuming t2 is where meter number is input
+        t1.setText(""); // Clear previous bill details
 
-            ResultSet rs = c.s.executeQuery("select * from customer where meter="+t2.getSelectedText());
-            
-            if(rs.next()){
-                t1.append("\n    Customer Name:"+rs.getString("name"));
-                t1.append("\n    Meter Number:  "+rs.getString("meter"));
-                t1.append("\n    Address:            "+rs.getString("address"));
-                t1.append("\n    State:                 "+rs.getString("state"));
-                t1.append("\n    City:                   "+rs.getString("city"));
-                t1.append("\n    Email:                "+rs.getString("email"));
-                t1.append("\n    Phone Number  "+rs.getString("phone"));
-                t1.append("\n-------------------------------------------------------------");
-                t1.append("\n");
-            }
+        if (meterNumber == null || meterNumber.trim().isEmpty()) {
+            t1.setText("\n    Please enter a Meter Number.");
+            return;
+        }
 
-            t1.append("Details of the Last Bills\n\n\n");
-            
-            rs = c.s.executeQuery("select * from bill where meter="+t2.getSelectedText());
-            
-            while(rs.next()){
-                t1.append("       "+ rs.getString("month") + "           " +rs.getString("amount") + "\n");
+        // Fetch Customer Details
+        String customerQuery = "select name, meter, address, state, city, email, phone from customer where meter = ?";
+        try (Conn conn = new Conn(); PreparedStatement psCustomer = conn.c.prepareStatement(customerQuery)) {
+            psCustomer.setString(1, meterNumber);
+            try (ResultSet rs = psCustomer.executeQuery()) {
+                if (rs.next()) {
+                    t1.append("\n    Customer Name: " + rs.getString("name"));
+                    t1.append("\n    Meter Number:  " + rs.getString("meter"));
+                    t1.append("\n    Address:       " + rs.getString("address"));
+                    t1.append("\n    State:         " + rs.getString("state"));
+                    t1.append("\n    City:          " + rs.getString("city"));
+                    t1.append("\n    Email:         " + rs.getString("email"));
+                    t1.append("\n    Phone Number:  " + rs.getString("phone"));
+                    t1.append("\n-------------------------------------------------------------");
+                    t1.append("\n");
+                } else {
+                    t1.append("\n    Customer details not found for meter: " + meterNumber);
+                    t1.append("\n-------------------------------------------------------------");
+                    t1.append("\n");
+                    // Optionally, do not proceed if customer not found
+                }
             }
-            
-            
-            
-            
-            
-            
-        }catch(Exception e){
+        } catch (SQLException e) {
             e.printStackTrace();
+            t1.append("\n    Error fetching customer details: " + e.getMessage());
+        }
+
+        t1.append("\nDetails of the Last Bills\n\n\n");
+        
+        // Fetch Bill Details
+        // Assuming there's an 'amount' column in the 'bill' table. If not, it should be 'total_bill'.
+        // Using 'total_bill' as it's more consistent with other classes.
+        String billQuery = "select month, total_bill, status from bill where meter_no = ? order by month"; // Added order by month
+        try (Conn conn = new Conn(); PreparedStatement psBill = conn.c.prepareStatement(billQuery)) {
+            psBill.setString(1, meterNumber);
+            try (ResultSet rs = psBill.executeQuery()) {
+                boolean foundBills = false;
+                while (rs.next()) {
+                    foundBills = true;
+                    t1.append("       Month: " + rs.getString("month") + 
+                              "           Amount: " + rs.getString("total_bill") + 
+                              "           Status: " + rs.getString("status") + "\n");
+                }
+                if (!foundBills) {
+                    t1.append("    No bill details found for meter: " + meterNumber);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            t1.append("\n    Error fetching bill details: " + e.getMessage());
+        } catch (Exception e) { // Catch any other unexpected errors
+            e.printStackTrace();
+            t1.append("\n    An unexpected error occurred: " + e.getMessage());
         }
     }
     

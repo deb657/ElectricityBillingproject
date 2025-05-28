@@ -85,35 +85,16 @@ public class PayBill extends JFrame implements ActionListener{
         l15.setForeground(Color.RED);
         add(l15);
         
-        
-        
-        try{
-            Conn c = new Conn();
-            ResultSet rs = c.s.executeQuery("select * from customer where meter = '"+meter+"'");
-            while(rs.next()){
-                l11.setText(rs.getString("meter"));
-                l12.setText(rs.getString("name"));
-            }
-            rs = c.s.executeQuery("select * from bill where meter = '"+meter+"' AND month = 'January' ");
-            while(rs.next()){
-                l13.setText(rs.getString("units"));
-                l14.setText(rs.getString("total_bill"));
-                l15.setText(rs.getString("status"));
-            }
-        }catch(Exception e){}
+        // Load initial customer and bill details
+        loadCustomerDetails(l11, l12); // Pass JLabels to update
+        loadBillDetails(c1.getSelectedItem(), l13, l14, l15); // Pass JLabels for bill details
         
         c1.addItemListener(new ItemListener(){
             @Override
             public void itemStateChanged(ItemEvent ae){
-                try{
-                    Conn c = new Conn();
-                    ResultSet rs = c.s.executeQuery("select * from bill where meter = '"+meter+"' AND month = '"+c1.getSelectedItem()+"'");
-                    while(rs.next()){
-                        l13.setText(rs.getString("units"));
-                        l14.setText(rs.getString("total_bill"));
-                        l15.setText(rs.getString("status"));
-                    }
-                }catch(Exception e){}
+                if (ae.getStateChange() == ItemEvent.SELECTED) {
+                    loadBillDetails(c1.getSelectedItem(), l13, l14, l15);
+                }
             }
         });
         
@@ -142,22 +123,96 @@ public class PayBill extends JFrame implements ActionListener{
         
         getContentPane().setBackground(Color.WHITE);        
     }
-    public void actionPerformed(ActionEvent ae){
-        if(ae.getSource() == b1){
-            try{
-                Conn c = new Conn();
-                c.s.executeQuery("update bill status = 'Paid' where meter = '"+meter+"' AND month = '"+c1.getSelectedItem()+"'");
-                
-            }catch(Exception e){}
-            this.setVisible(false);
-            new Paytm(meter).setVisible(true);
+    
+    private void loadCustomerDetails(JLabel meterLabel, JLabel nameLabel) {
+        String customerQuery = "select meter, name from customer where meter = ?";
+        try (Conn conn = new Conn(); PreparedStatement psCustomer = conn.c.prepareStatement(customerQuery)) {
+            psCustomer.setString(1, this.meter);
+            try (ResultSet rs = psCustomer.executeQuery()) {
+                if (rs.next()) {
+                    meterLabel.setText(rs.getString("meter"));
+                    nameLabel.setText(rs.getString("name"));
+                } else {
+                    JOptionPane.showMessageDialog(this, "Customer not found.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading customer details: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
-        }else if(ae.getSource()== b2){
+    private void loadBillDetails(String month, JLabel unitsLabel, JLabel totalBillLabel, JLabel statusLabel) {
+        if (month == null) return; // Or handle as an error
+        String billQuery = "select units, total_bill, status from bill where meter_no = ? AND month = ?";
+        try (Conn conn = new Conn(); PreparedStatement psBill = conn.c.prepareStatement(billQuery)) {
+            psBill.setString(1, this.meter);
+            psBill.setString(2, month);
+            try (ResultSet rs = psBill.executeQuery()) {
+                if (rs.next()) {
+                    unitsLabel.setText(rs.getString("units"));
+                    totalBillLabel.setText(rs.getString("total_bill"));
+                    statusLabel.setText(rs.getString("status"));
+                    // Enable Pay button only if status is "Not Paid"
+                    b1.setEnabled("Not Paid".equalsIgnoreCase(rs.getString("status"))); 
+                } else {
+                    unitsLabel.setText("");
+                    totalBillLabel.setText("");
+                    statusLabel.setText("Not Found");
+                    b1.setEnabled(false); // Disable Pay button if bill not found
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading bill details for month " + month + ": " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            unitsLabel.setText("");
+            totalBillLabel.setText("");
+            statusLabel.setText("Error");
+            b1.setEnabled(false);
+        }
+    }
+
+    public void actionPerformed(ActionEvent ae){
+        if(ae.getSource() == b1){ // Pay button
+            String selectedMonth = c1.getSelectedItem();
+            if (selectedMonth == null || selectedMonth.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please select a month.", "Warning", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // Double check if bill is already paid before attempting to update
+            if (!"Not Paid".equalsIgnoreCase(l15.getText())) { // l15 is statusLabel
+                 JOptionPane.showMessageDialog(this, "Bill for " + selectedMonth + " is already " + l15.getText() + ".", "Information", JOptionPane.INFORMATION_MESSAGE);
+                 return;
+            }
+
+            String updateQuery = "update bill set status = 'Paid' where meter_no = ? AND month = ?";
+            try (Conn conn = new Conn(); PreparedStatement psUpdate = conn.c.prepareStatement(updateQuery)) {
+                psUpdate.setString(1, this.meter);
+                psUpdate.setString(2, selectedMonth);
+                
+                int rowsAffected = psUpdate.executeUpdate();
+                if (rowsAffected > 0) {
+                    // Successfully updated, now navigate to Paytm
+                    this.setVisible(false);
+                    new Paytm(meter).setVisible(true);
+                } else {
+                    JOptionPane.showMessageDialog(this, "Failed to update bill status. Please try again.", "Update Error", JOptionPane.ERROR_MESSAGE);
+                }
+                
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Database error during payment: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+
+        } else if(ae.getSource()== b2){ // Back button
             this.setVisible(false);
         }        
     }
     
-       
     public static void main(String[] args){
         new PayBill("").setVisible(true);
     }

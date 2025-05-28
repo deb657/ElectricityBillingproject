@@ -19,19 +19,24 @@ public class BillDetails extends JFrame{
         setLayout(null);
         getContentPane().setBackground(Color.WHITE);
         
-        t1 = new JTable(y,x);
+        // t1 = new JTable(y,x); // This initialization is not ideal if using DbUtils
+        t1 = new JTable(); // Initialize JTable, DbUtils will provide the model
         
-        try{
-            Conn c  = new Conn();
-            String s1 = "select * from bill where meter = " + meter;
-            ResultSet rs  = c.s.executeQuery(s1);
-            
-            t1.setModel(DbUtils.resultSetToTableModel(rs));
-            
-        }catch(Exception e){
+        String query = "select meter_no, month, units, total_bill, status from bill where meter_no = ?";
+        
+        try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+            pstmt.setString(1, meter);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                t1.setModel(DbUtils.resultSetToTableModel(rs));
+            } // rs is auto-closed here
+        } catch (SQLException e) {
             e.printStackTrace();
+            // Consider showing an error message to the user in the UI
+            JOptionPane.showMessageDialog(this, "Error fetching bill details: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) { // Catch other potential exceptions
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
-        
         
         JScrollPane sp = new JScrollPane(t1);
         sp.setBounds(0, 0, 700, 650);

@@ -34,24 +34,22 @@ public class DepositDetails extends JFrame implements ActionListener{
         
         c2 = new Choice();
         
-        t1 = new JTable(y,x);
+        // t1 = new JTable(y,x); // Not ideal with DbUtils
+        t1 = new JTable(); // Initialize JTable, DbUtils will provide the model
         
-        try{
-            Conn c  = new Conn();
-            String s1 = "select * from bill";
-            ResultSet rs  = c.s.executeQuery(s1);
-            
-            t1.setModel(DbUtils.resultSetToTableModel(rs));
-            
-            String str2 = "select * from customer";
-            rs = c.s.executeQuery(str2);
+        // Load initial bill data
+        loadBillData("select meter_no, month, units, total_bill, status from bill");
+        
+        // Load meter numbers into choice c1
+        try (Conn conn = new Conn();
+             Statement stmt = conn.c.createStatement();
+             ResultSet rs = stmt.executeQuery("select distinct meter from customer")) { // Assuming 'meter' is the column name
             while(rs.next()){
                 c1.add(rs.getString("meter"));
             }
-            
-            
-        }catch(Exception e){
+        } catch(SQLException e){
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading meter numbers: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
         
         c1.setBounds(180,20, 150, 20);
@@ -89,18 +87,50 @@ public class DepositDetails extends JFrame implements ActionListener{
         add(sp);
         
     }
-    public void actionPerformed(ActionEvent ae){
-        if(ae.getSource() == b1){
-            String str = "select * from bill where meter = '"+c1.getSelectedItem()+"' AND month = '"+c2.getSelectedItem()+"'";
-            try{
-                Conn c = new Conn();
-                ResultSet rs = c.s.executeQuery(str);
+    
+    private void loadBillData(String query, String... params) {
+        try (Conn conn = new Conn();
+             PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+            for (int k = 0; k < params.length; k++) {
+                pstmt.setString(k + 1, params[k]);
+            }
+            try (ResultSet rs = pstmt.executeQuery()) {
                 t1.setModel(DbUtils.resultSetToTableModel(rs));
-            }catch(Exception e){}
-        }else if(ae.getSource() == b2){
+            } // rs is auto-closed
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading bill data: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    public void actionPerformed(ActionEvent ae){
+        if(ae.getSource() == b1){ // Search button
+            String meterNumber = c1.getSelectedItem();
+            String month = c2.getSelectedItem();
+            
+            if (meterNumber == null || meterNumber.isEmpty() || month == null || month.isEmpty()) {
+                 // Load all data if no specific filter is selected, or show a message
+                loadBillData("select meter_no, month, units, total_bill, status from bill"); // Or specific columns as needed
+                // JOptionPane.showMessageDialog(this, "Please select both meter number and month to search.");
+                return;
+            }
+            
+            String query = "select meter_no, month, units, total_bill, status from bill where meter_no = ? AND month = ?";
+            loadBillData(query, meterNumber, month);
+
+        }else if(ae.getSource() == b2){ // Print button
             try{
                 t1.print();
-            }catch(Exception e){}
+            } catch (java.awt.print.PrinterException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error printing details: " + e.getMessage(), "Printing Error", JOptionPane.ERROR_MESSAGE);
+            } catch(Exception e){
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "An unexpected error occurred during printing: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
     

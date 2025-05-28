@@ -114,28 +114,67 @@ public class Signup extends JFrame implements ActionListener{
         p1.add(l6);
     }
     
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+// ... (rest of the imports and class definition remain the same)
+
     public void actionPerformed(ActionEvent ae){
         if(ae.getSource() == b1){
             String username = t1.getText();
             String name = t2.getText();
             String password = t3.getText();
             String user = c1.getSelectedItem();
-            String meter = t4.getText();
-            try{
-                Conn c = new Conn();
-                String str = null;
-                if(user.equals("Admin")){
-                    str = "insert into login values('"+meter+"', '"+username+"', '"+name+"', '"+password+"', '"+user+"')";
-                }else{
-                    str = "update login set username = '"+username+"', name = '"+name+"', password = '"+password+"', user = '"+user+"' where meter_no = '"+t4.getText()+"'";
+            String meter = t4.getText(); // Meter number from t4 text field
+
+            // Input validation (basic example, can be more comprehensive)
+            if (username.isEmpty() || name.isEmpty() || password.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Please fill in all required fields.");
+                return;
+            }
+            if (user.equals("Customer") && meter.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Meter number is required for Customer accounts.");
+                return;
+            }
+
+
+            String query;
+            if(user.equals("Admin")){
+                // For Admin, meter can be empty or have a value (as per original logic, though meter for admin might not be logical)
+                // If meter is intended to be NULL for Admin if t4 is empty, the DB schema and query need to handle it.
+                // Assuming meter is a required field in the 'login' table for all users based on original insert.
+                // If meter can be optional for Admin, the insert statement and table structure should reflect that.
+                query = "insert into login (meter_no, username, name, password, user) values(?, ?, ?, ?, ?)";
+            }else{ // Customer
+                query = "update login set username = ?, name = ?, password = ?, user = ? where meter_no = ?";
+            }
+
+            try (Conn con = new Conn(); PreparedStatement ps = con.c.prepareStatement(query)) {
+                if (user.equals("Admin")) {
+                    ps.setString(1, meter); // Use meter from t4, or handle if it should be different for Admin
+                    ps.setString(2, username);
+                    ps.setString(3, name);
+                    ps.setString(4, password);
+                    ps.setString(5, user);
+                } else { // Customer
+                    ps.setString(1, username);
+                    ps.setString(2, name);
+                    ps.setString(3, password);
+                    ps.setString(4, user);
+                    ps.setString(5, meter); // meter from t4 for where clause
                 }
                 
-                c.s.executeUpdate(str);
-                JOptionPane.showMessageDialog(null, "Account Created Successfully");
+                ps.executeUpdate();
+                JOptionPane.showMessageDialog(null, "Account Created/Updated Successfully");
                 this.setVisible(false);
                 new Login().setVisible(true);
-            }catch(Exception e){
-                
+
+            } catch(SQLException e){
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "Database Error: " + e.getMessage());
+            } catch(Exception e){ // Catch any other unexpected errors
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "An unexpected error occurred: " + e.getMessage());
             }
         } else if(ae.getSource()== b2){
             this.setVisible(false);
@@ -143,6 +182,7 @@ public class Signup extends JFrame implements ActionListener{
         }
     }
     
+    // main method remains the same
     public static void main(String[] args){
         new Signup().setVisible(true);
     }

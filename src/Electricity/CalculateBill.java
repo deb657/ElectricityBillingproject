@@ -37,13 +37,15 @@ public class CalculateBill extends JFrame implements ActionListener{
         
         c1 = new Choice();
         c1.setBounds(200, 70, 180, 20);
-        try{
-            Conn c = new Conn();
-            ResultSet rs = c.s.executeQuery("select * from customer");
+        // Load meter numbers into choice c1
+        try (Conn conn = new Conn(); Statement stmt = conn.c.createStatement(); ResultSet rs = stmt.executeQuery("select meter from customer")) {
             while(rs.next()){
                 c1.add(rs.getString("meter"));
             }
-        }catch(Exception e){}
+        } catch(SQLException e){
+            e.printStackTrace();
+            // Handle error loading meter numbers, e.g., show a message
+        }
         
         JLabel l11 = new JLabel();
         l11.setBounds(200, 120, 180, 20);
@@ -53,25 +55,12 @@ public class CalculateBill extends JFrame implements ActionListener{
         l12.setBounds(200, 170, 180, 20);
         p.add(l12);
         
-        try{
-            Conn c = new Conn();
-            ResultSet rs = c.s.executeQuery("select * from customer where meter = '"+c1.getSelectedItem()+"'");
-            while(rs.next()){
-                l11.setText(rs.getString("name"));
-                l12.setText(rs.getString("address"));
-            }
-        }catch(Exception e){}
+        // Initial load of customer details
+        loadCustomerDetails(c1.getSelectedItem(), l11, l12);
         
         c1.addItemListener(new ItemListener(){
             public void itemStateChanged(ItemEvent ae){
-                try{
-                    Conn c = new Conn();
-                    ResultSet rs = c.s.executeQuery("select * from customer where meter = '"+c1.getSelectedItem()+"'");
-                    while(rs.next()){
-                        l11.setText(rs.getString("name"));
-                        l12.setText(rs.getString("address"));
-                    }
-                }catch(Exception e){}
+                loadCustomerDetails(c1.getSelectedItem(), l11, l12);
             }
         });
         
@@ -143,45 +132,94 @@ public class CalculateBill extends JFrame implements ActionListener{
         setSize(750,500);
         setLocation(550,220);
     }
+    
+    // Helper method to load customer details
+    private void loadCustomerDetails(String meterNumber, JLabel nameLabel, JLabel addressLabel) {
+        String query = "select name, address from customer where meter = ?";
+        try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+            pstmt.setString(1, meterNumber);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    nameLabel.setText(rs.getString("name"));
+                    addressLabel.setText(rs.getString("address"));
+                } else {
+                    nameLabel.setText("");
+                    addressLabel.setText("");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            // Handle error loading customer details
+            nameLabel.setText("Error");
+            addressLabel.setText("Error");
+        }
+    }
+
     public void actionPerformed(ActionEvent ae){
         if(ae.getSource() == b1){
             String meter_no = c1.getSelectedItem();
-            String units = t1.getText();
+            String unitsStr = t1.getText();
             String month = c2.getSelectedItem();
 
-            int units_consumed = Integer.parseInt(units);
-
-            int total_bill = 0;
-            try{
-                Conn c = new Conn();
-                ResultSet rs = c.s.executeQuery("select * from tax");
-                while(rs.next()){
-                    total_bill = units_consumed * Integer.parseInt(rs.getString("cost_per_unit")); // 120 * 9
-                    total_bill += Integer.parseInt(rs.getString("meter_rent"));
-                    total_bill += Integer.parseInt(rs.getString("service_charge"));
-                    total_bill += Integer.parseInt(rs.getString("service_tax"));
-                    total_bill += Integer.parseInt(rs.getString("swacch_bharat_cess"));
-                    total_bill += Integer.parseInt(rs.getString("fixed_tax"));
-                }
-            }catch(Exception e){}
-
-            String q = "insert into bill values('"+meter_no+"','"+month+"','"+units+"','"+total_bill+"', 'Not Paid')";
-
-            try{
-                Conn c1 = new Conn();
-                c1.s.executeUpdate(q);
-                JOptionPane.showMessageDialog(null,"Customer Bill Updated Successfully");
-                this.setVisible(false);
-            }catch(Exception aee){
-                aee.printStackTrace();
+            if (unitsStr.isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Please enter units consumed.");
+                return;
             }
 
-        }else if(ae.getSource()== b2){
+            int units_consumed;
+            try {
+                units_consumed = Integer.parseInt(unitsStr);
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(null, "Invalid number for units consumed.");
+                return;
+            }
+
+            int total_bill = 0;
+            String queryTax = "select cost_per_unit, meter_rent, service_charge, service_tax, swacch_bharat_cess, fixed_tax from tax";
+            // In a real app, tax might be specific to meter_no or customer type, but current schema implies one tax rule.
+
+            try (Conn conn = new Conn();
+                 Statement stmtTax = conn.c.createStatement();
+                 ResultSet rsTax = stmtTax.executeQuery(queryTax)) {
+
+                if (rsTax.next()) {
+                    total_bill = units_consumed * rsTax.getInt("cost_per_unit");
+                    total_bill += rsTax.getInt("meter_rent");
+                    total_bill += rsTax.getInt("service_charge");
+                    total_bill += rsTax.getInt("service_tax");
+                    total_bill += rsTax.getInt("swacch_bharat_cess");
+                    total_bill += rsTax.getInt("fixed_tax");
+                } else {
+                     JOptionPane.showMessageDialog(null,"Tax details not found. Please configure tax data.");
+                     return;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null,"Database Error while fetching tax details: " + e.getMessage());
+                return;
+            }
+
+            String queryInsertBill = "insert into bill (meter_no, month, units, total_bill, status) values(?, ?, ?, ?, ?)";
+            try (Conn conn = new Conn(); PreparedStatement psBill = conn.c.prepareStatement(queryInsertBill)) {
+                psBill.setString(1, meter_no);
+                psBill.setString(2, month);
+                psBill.setInt(3, units_consumed);
+                psBill.setInt(4, total_bill);
+                psBill.setString(5, "Not Paid");
+                psBill.executeUpdate();
+                
+                JOptionPane.showMessageDialog(null,"Customer Bill Updated Successfully");
+                this.setVisible(false);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null,"Database Error while saving bill: " + e.getMessage());
+            }
+
+        } else if(ae.getSource()== b2){
             this.setVisible(false);
         }        
     }
     
-       
     public static void main(String[] args){
         new CalculateBill().setVisible(true);
     }

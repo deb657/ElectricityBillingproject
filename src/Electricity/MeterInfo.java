@@ -128,17 +128,28 @@ public class MeterInfo extends JFrame implements ActionListener{
             String meter_type = c2.getSelectedItem();
             String phase_code = c3.getSelectedItem();
             String bill_type = c4.getSelectedItem();
-            String days = "30";
+            String days = "30"; // This is constant as per UI
 
-            String q1 = "insert into meter_info values('"+meter_number+"','"+meter_location+"','"+meter_type+"','"+phase_code+"','"+bill_type+"','"+days+"')";
-            try{
-                Conn c1 = new Conn();
-                c1.s.executeUpdate(q1);
+            String query = "insert into meter_info (meter_number, meter_location, meter_type, phase_code, bill_type, days) values (?, ?, ?, ?, ?, ?)";
+            
+            try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+                pstmt.setString(1, meter_number);
+                pstmt.setString(2, meter_location);
+                pstmt.setString(3, meter_type);
+                pstmt.setString(4, phase_code);
+                pstmt.setString(5, bill_type);
+                pstmt.setString(6, days);
+                
+                pstmt.executeUpdate();
                 JOptionPane.showMessageDialog(null,"Meter Info Added Successfully");
                 this.setVisible(false);
 
-            }catch(Exception ex){
+            } catch(SQLException ex){
                  ex.printStackTrace();
+                 JOptionPane.showMessageDialog(null,"Database Error: " + ex.getMessage());
+            } catch (Exception ex) { // Catch any other unexpected errors
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(null, "An unexpected error occurred: " + ex.getMessage());
             }
         }else if(ae.getSource() == b2){
             this.setVisible(false);

@@ -83,16 +83,24 @@ public class Login extends JFrame implements ActionListener{
     }
     public void actionPerformed(ActionEvent ae){
         if(ae.getSource() == b1){
-            try{        
+            try{
                 Conn c = new Conn();
-                String a  = tf1.getText();
-                String b  = pf2.getText();
-                String user = c1.getSelectedItem();
-                String q  = "select * from login where username = '"+a+"' and password = '"+b+"' and user = '"+user+"'";
-                ResultSet rs = c.s.executeQuery(q);
+                String username  = tf1.getText();
+                String password  = pf2.getText();
+                String userType = c1.getSelectedItem();
+                
+                // Using PreparedStatement
+                String query  = "select * from login where username = ? and password = ? and user = ?";
+                PreparedStatement pstmt = c.c.prepareStatement(query);
+                pstmt.setString(1, username);
+                pstmt.setString(2, password);
+                pstmt.setString(3, userType);
+                
+                ResultSet rs = pstmt.executeQuery();
+                
                 if(rs.next()){
                     String meter = rs.getString("meter_no");
-                    new Project(meter, user).setVisible(true);
+                    new Project(meter, userType).setVisible(true);
                     this.setVisible(false);
 
                 }else{
@@ -100,9 +108,16 @@ public class Login extends JFrame implements ActionListener{
                     tf1.setText("");
                     pf2.setText("");
                 }
-            }catch(Exception e){
+                rs.close();
+                pstmt.close();
+            }catch(SQLException e){ // Specific exception handling
                 e.printStackTrace();
-                System.out.println("error: "+e);
+                JOptionPane.showMessageDialog(null, "Database Error: " + e.getMessage());
+                System.err.println("SQL error: "+e);
+            }catch(Exception e){ // Catching other potential exceptions
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "An unexpected error occurred: " + e.getMessage());
+                System.err.println("Error: "+e);
             }
         }else if(ae.getSource() == b2){
             this.setVisible(false);

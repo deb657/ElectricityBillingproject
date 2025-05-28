@@ -74,20 +74,7 @@ public class ViewInformation extends JFrame implements ActionListener{
         l17.setBounds(650, 200, 100, 20);
         add(l17);
         
-        try{
-            Conn c = new Conn();
-            ResultSet rs = c.s.executeQuery("select * from customer where meter = '"+meter+"'");
-            while(rs.next()){
-                l11.setText(rs.getString(1));
-                l12.setText(rs.getString(2));
-                l13.setText(rs.getString(3));
-                l14.setText(rs.getString(4));
-                l15.setText(rs.getString(5));
-                l16.setText(rs.getString(6));
-                l17.setText(rs.getString(7));
-                
-            }
-        }catch(Exception e){}
+        loadCustomerInfo(meter);
         
         b1 = new JButton("Back");
         b1.setBackground(Color.BLACK);
@@ -104,8 +91,40 @@ public class ViewInformation extends JFrame implements ActionListener{
         add(l8);
     }
     
+    
+    private void loadCustomerInfo(String meterNumber) {
+        String query = "select name, meter, address, city, state, email, phone from customer where meter = ?";
+        try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+            pstmt.setString(1, meterNumber);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    l11.setText(rs.getString("name"));    // Name
+                    l12.setText(rs.getString("meter"));   // Meter Number
+                    l13.setText(rs.getString("address")); // Address
+                    l14.setText(rs.getString("city"));    // City
+                    l15.setText(rs.getString("state"));   // State
+                    l16.setText(rs.getString("email"));   // Email
+                    l17.setText(rs.getString("phone"));   // Phone
+                } else {
+                    JOptionPane.showMessageDialog(this, "Customer details not found for meter: " + meterNumber, "Error", JOptionPane.ERROR_MESSAGE);
+                    // Optionally clear labels or set to "Not Found"
+                    l11.setText(""); l12.setText(""); l13.setText(""); l14.setText("");
+                    l15.setText(""); l16.setText(""); l17.setText("");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Database error loading customer details: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) { // Catch other unexpected errors
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
     public void actionPerformed(ActionEvent ae){
-        this.setVisible(false);
+        if (ae.getSource() == b1) { // Back button
+            this.setVisible(false);
+        }
     }
     
     public static void main(String[] args){

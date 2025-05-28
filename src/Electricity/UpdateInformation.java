@@ -93,20 +93,8 @@ public class UpdateInformation extends JFrame implements ActionListener{
         b2.addActionListener(this);
         add(b2);
         
-        try{
-            Conn c = new Conn();
-            ResultSet rs = c.s.executeQuery("select * from customer where meter = '"+meter+"'");
-            while(rs.next()){
-                l11.setText(rs.getString(1));
-                l12.setText(rs.getString(2));
-                t1.setText(rs.getString(3));
-                t2.setText(rs.getString(4));
-                t3.setText(rs.getString(5));
-                t4.setText(rs.getString(6));
-                t5.setText(rs.getString(7));
-                
-            }
-        }catch(Exception e){}
+        // Load customer information
+        loadCustomerInfo();
         
         ImageIcon i1 = new ImageIcon(ClassLoader.getSystemResource("icon/update.jpg"));
         Image i2  = i1.getImage().getScaledInstance(400, 300, Image.SCALE_DEFAULT);
@@ -116,25 +104,74 @@ public class UpdateInformation extends JFrame implements ActionListener{
         add(l8);
     }
     
+    
+    private void loadCustomerInfo() {
+        String query = "select name, meter, address, city, state, email, phone from customer where meter = ?";
+        try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(query)) {
+            pstmt.setString(1, this.meter);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    l11.setText(rs.getString("name")); // Name label
+                    l12.setText(rs.getString("meter")); // Meter number label
+                    t1.setText(rs.getString("address")); // Address text field
+                    t2.setText(rs.getString("city"));    // City text field
+                    t3.setText(rs.getString("state"));   // State text field
+                    t4.setText(rs.getString("email"));   // Email text field
+                    t5.setText(rs.getString("phone"));   // Phone text field
+                } else {
+                    JOptionPane.showMessageDialog(this, "Customer details not found for meter: " + this.meter, "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Database error loading customer details: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
     public void actionPerformed(ActionEvent ae){
-        if(ae.getSource() == b1){
-            String s1 = l11.getText();
-            String s2 = l12.getText();
-            String s3 = t1.getText();
-            String s4 = t2.getText();
-            String s5 = t3.getText();
-            String s6 = t4.getText();
-            String s7 = t5.getText();
+        if(ae.getSource() == b1){ // Update button
+            String address = t1.getText();
+            String city = t2.getText();
+            String state = t3.getText();
+            String email = t4.getText();
+            String phone = t5.getText();
+
+            // Basic validation
+            if (address.isEmpty() || city.isEmpty() || state.isEmpty() || email.isEmpty() || phone.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "All fields must be filled out.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             
-            try{
-                Conn c = new Conn();
-                c.s.executeUpdate("update customer set address = '"+s3+"', city = '"+s4+"', state = '"+s5+"', email = '"+s6+"', phone = '"+s7+"' where meter = '"+meter+"'");
-                JOptionPane.showMessageDialog(null, "Details Updated Successfully");
-                this.setVisible(false);
+            String updateQuery = "update customer set address = ?, city = ?, state = ?, email = ?, phone = ? where meter = ?";
+            
+            try (Conn conn = new Conn(); PreparedStatement pstmt = conn.c.prepareStatement(updateQuery)) {
+                pstmt.setString(1, address);
+                pstmt.setString(2, city);
+                pstmt.setString(3, state);
+                pstmt.setString(4, email);
+                pstmt.setString(5, phone);
+                pstmt.setString(6, this.meter); // Meter number for the WHERE clause
                 
-            }catch(Exception e){}
+                int rowsAffected = pstmt.executeUpdate();
+                if (rowsAffected > 0) {
+                    JOptionPane.showMessageDialog(null, "Details Updated Successfully");
+                    this.setVisible(false);
+                } else {
+                    JOptionPane.showMessageDialog(null, "Failed to update details. Meter number might not exist or data is unchanged.", "Update Failed", JOptionPane.WARNING_MESSAGE);
+                }
+                
+            } catch (SQLException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Database error updating details: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "An unexpected error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
             
-        }else if(ae.getSource() == b2){
+        }else if(ae.getSource() == b2){ // Back button
             this.setVisible(false);
         }
     }
